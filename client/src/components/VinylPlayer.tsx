@@ -12,8 +12,19 @@ interface VinylPlayerProps {
 }
 
 export function VinylPlayer({ artistId, currentTrack, isPlaying }: VinylPlayerProps) {
-  const { togglePlay, playRandomTrack } = useSpotify();
+  const { togglePlay, playRandomTrack, deviceReady } = useSpotify();
   const timerRef = useRef<NodeJS.Timeout>();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (!deviceReady) {
+      toast({
+        title: "No Playback Device",
+        description: "Please wait while we initialize the player...",
+        variant: "default",
+      });
+    }
+  }, [deviceReady, toast]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -28,6 +39,38 @@ export function VinylPlayer({ artistId, currentTrack, isPlaying }: VinylPlayerPr
       }
     };
   }, [isPlaying]);
+
+  const handlePlayRandomTrack = async () => {
+    if (!deviceReady) {
+      toast({
+        title: "Player Not Ready",
+        description: "Please wait for the player to initialize",
+        variant: "destructive",
+      });
+      return;
+    }
+    await playRandomTrack(artistId);
+  };
+
+  const handleTogglePlay = async () => {
+    if (!deviceReady) {
+      toast({
+        title: "Player Not Ready",
+        description: "Please wait for the player to initialize",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!currentTrack) {
+      toast({
+        title: "No Track Selected",
+        description: "Please select a track first",
+        variant: "destructive",
+      });
+      return;
+    }
+    await togglePlay();
+  };
 
   return (
     <div className="relative w-[300px] h-[300px] md:w-[400px] md:h-[400px]">

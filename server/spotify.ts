@@ -179,26 +179,69 @@ export function setupSpotifyRoutes(app: Express) {
   });
 
   app.post("/api/spotify/toggle-play", async (req, res) => {
+    const { device_id } = req.body;
+
+    if (!req.session.spotifyToken) {
+      console.error("Toggle play failed: No Spotify token");
+      return res.status(401).json({ error: "Not authenticated with Spotify" });
+    }
+
     try {
+      // Get current playback state
       const stateResponse = await fetch("https://api.spotify.com/v1/me/player", {
         headers: {
           Authorization: `Bearer ${req.session.spotifyToken}`,
         },
       });
 
+      if (!stateResponse.ok) {
+        const error = await stateResponse.text();
+        console.error("Failed to get playback state:", error);
+        return res.status(stateResponse.status).json({ 
+          error: "Failed to get playback state",
+          details: error
+        });
+      }
+
+      // Handle no active playback
+      if (stateResponse.status === 204) {
+        console.error("No active playback session");
+        return res.status(404).json({ error: "No active playback session" });
+      }
+
       const playerState = await stateResponse.json();
       const endpoint = playerState.is_playing ? "pause" : "play";
 
-      await fetch(`https://api.spotify.com/v1/me/player/${endpoint}`, {
+      // Execute play/pause command
+      const toggleResponse = await fetch(`https://api.spotify.com/v1/me/player/${endpoint}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${req.session.spotifyToken}`,
+          "Content-Type": "application/json",
         },
+        body: device_id ? JSON.stringify({ device_id }) : undefined,
       });
 
-      res.json({ success: true });
+      if (!toggleResponse.ok) {
+        const error = await toggleResponse.text();
+        console.error(`Failed to ${endpoint}:`, error);
+        return res.status(toggleResponse.status).json({ 
+          error: `Failed to ${endpoint} playback`,
+          details: error
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        is_playing: !playerState.is_playing,
+        device_id: device_id || playerState.device?.id
+      });
     } catch (error) {
-      res.status(500).send("Failed to toggle playback");
+      console.error("Toggle play error:", error);
+      res.status(500).json({ 
+        error: "Failed to toggle playback",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
