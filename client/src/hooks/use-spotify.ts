@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 interface SpotifyTrack {
   id: string;
@@ -15,6 +16,7 @@ interface SpotifyArtist {
 export function useSpotify() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [searchResults, setSearchResults] = useState<SpotifyArtist[]>([]);
 
   const { data: session } = useQuery({
     queryKey: ["spotify-session"],
@@ -40,9 +42,21 @@ export function useSpotify() {
   };
 
   const searchArtists = async (query: string) => {
-    const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}`);
-    if (!res.ok) throw new Error("Search failed");
-    return res.json();
+    try {
+      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) throw new Error("Search failed");
+      const data = await res.json();
+      setSearchResults(data);
+      return data;
+    } catch (error) {
+      console.error("Search failed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to search artists",
+        variant: "destructive",
+      });
+      return [];
+    }
   };
 
   const togglePlayMutation = useMutation({
@@ -88,6 +102,7 @@ export function useSpotify() {
     isPlaying: currentTrack?.is_playing || false,
     login,
     searchArtists,
+    searchResults,
     togglePlay: () => togglePlayMutation.mutate(),
     playRandomTrack: (artistId: string) => playRandomTrackMutation.mutate(artistId),
   };

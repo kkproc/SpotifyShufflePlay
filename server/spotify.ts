@@ -20,6 +20,7 @@ export function setupSpotifyRoutes(app: Express) {
   }));
 
   app.get("/api/spotify/login", (req, res) => {
+    console.log("Spotify Login - Redirect URI:", SPOTIFY_REDIRECT_URI);
     const scope = "streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state";
     res.redirect(`https://accounts.spotify.com/authorize?${new URLSearchParams({
       response_type: "code",
