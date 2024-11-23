@@ -60,6 +60,16 @@ export function useSpotify() {
         console.log('Ready with Device ID', device_id);
         setDeviceId(device_id);
         setDeviceReady(true);
+        
+        // Activate device
+        fetch("https://api.spotify.com/v1/me/player", {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${session?.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ device_ids: [device_id], play: false }),
+        });
       });
 
       player.connect();

@@ -190,59 +190,49 @@ export function setupSpotifyRoutes(app: Express) {
     const { device_id } = req.body;
 
     if (!req.session.spotifyToken) {
-      console.error("Toggle play failed: No Spotify token");
       return res.status(401).json({ error: "Not authenticated with Spotify" });
     }
 
     try {
-      // Get current playback state
+      // First, transfer playback to our device if needed
+      await fetch("https://api.spotify.com/v1/me/player", {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${req.session.spotifyToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ device_ids: [device_id], play: true }),
+      });
+
+      // Then get current playback state
       const stateResponse = await fetch("https://api.spotify.com/v1/me/player", {
         headers: {
           Authorization: `Bearer ${req.session.spotifyToken}`,
         },
       });
 
-      if (!stateResponse.ok) {
-        const error = await stateResponse.text();
-        console.error("Failed to get playback state:", error);
-        return res.status(stateResponse.status).json({ 
-          error: "Failed to get playback state",
-          details: error
-        });
-      }
-
-      // Handle no active playback
       if (stateResponse.status === 204) {
-        console.error("No active playback session");
-        return res.status(404).json({ error: "No active playback session" });
+        return res.status(200).json({ success: true, is_playing: false });
       }
 
       const playerState = await stateResponse.json();
       const endpoint = playerState.is_playing ? "pause" : "play";
 
-      // Execute play/pause command
       const toggleResponse = await fetch(`https://api.spotify.com/v1/me/player/${endpoint}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${req.session.spotifyToken}`,
-          "Content-Type": "application/json",
         },
-        body: device_id ? JSON.stringify({ device_id }) : undefined,
       });
 
       if (!toggleResponse.ok) {
-        const error = await toggleResponse.text();
-        console.error(`Failed to ${endpoint}:`, error);
-        return res.status(toggleResponse.status).json({ 
-          error: `Failed to ${endpoint} playback`,
-          details: error
-        });
+        throw new Error(await toggleResponse.text());
       }
 
       res.json({ 
         success: true, 
         is_playing: !playerState.is_playing,
-        device_id: device_id || playerState.device?.id
+        device_id
       });
     } catch (error) {
       console.error("Toggle play error:", error);
