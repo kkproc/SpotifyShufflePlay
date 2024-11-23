@@ -1,38 +1,27 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
 
-interface SpotifyTrack {
+interface Artist {
   id: string;
   name: string;
-  artists: { name: string }[];
 }
 
-interface SpotifyArtist {
-  id: string;
-  name: string;
+declare global {
+  interface Window {
+    Spotify: {
+      Player: any;
+    };
+    onSpotifyWebPlaybackSDKReady: () => void;
+  }
 }
 
 export function useSpotify() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [searchResults, setSearchResults] = useState<SpotifyArtist[]>([]);
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data === 'auth-success') {
-        queryClient.invalidateQueries({ queryKey: ["spotify-session"] });
-      } else if (event.data === 'auth-error') {
-        toast({
-          title: "Error",
-          description: "Authentication failed",
-          variant: "destructive",
-        });
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [queryClient, toast]);
+  const { toast } = useToast();
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<Artist[]>([]);
+  const playerRef = useRef<any>(null);
 
   const { data: session } = useQuery({
     queryKey: ["spotify-session"],
@@ -52,6 +41,62 @@ export function useSpotify() {
     },
     enabled: !!session,
   });
+
+  useEffect(() => {
+    const messageHandler = async (event: MessageEvent) => {
+      if (event.data === "spotify-login-success") {
+        queryClient.invalidateQueries({ queryKey: ["spotify-session"] });
+        toast({
+          title: "Success",
+          description: "Successfully connected to Spotify",
+        });
+      }
+    };
+
+    window.addEventListener("message", messageHandler);
+    return () => {
+      window.removeEventListener("message", messageHandler);
+    };
+  }, [queryClient, toast]);
+
+  // Initialize Spotify Web Playback SDK
+  useEffect(() => {
+    if (!session) return;
+
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      const player = new window.Spotify.Player({
+        name: 'Vinyl Player',
+        getOAuthToken: cb => {
+          fetch('/api/spotify/session-token')
+            .then(res => res.json())
+            .then(data => cb(data.token));
+        },
+        volume: 0.5
+      });
+
+      player.addListener('ready', ({ device_id }: { device_id: string }) => {
+        console.log('Ready with Device ID', device_id);
+        setDeviceId(device_id);
+        playerRef.current = player;
+      });
+
+      player.addListener('not_ready', ({ device_id }: { device_id: string }) => {
+        console.log('Device ID has gone offline', device_id);
+        setDeviceId(null);
+      });
+
+      player.connect();
+    };
+  }, [session]);
+
+  // Cleanup player on unmount
+  useEffect(() => {
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.disconnect();
+      }
+    };
+  }, []);
 
   const login = async () => {
     window.open("/api/spotify/login", "_blank", "width=800,height=600");
