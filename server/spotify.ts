@@ -10,7 +10,19 @@ declare module 'express-session' {
 
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const SPOTIFY_REDIRECT_URI = process.env.REPLIT_DOMAINS?.split(",")[0] + "/api/spotify/callback";
+const SPOTIFY_REDIRECT_URI = process.env.REPLIT_DOMAINS 
+  ? "https://" + process.env.REPLIT_DOMAINS.split(",")[0] + "/api/spotify/callback"
+  : "";
+
+if (!SPOTIFY_REDIRECT_URI) {
+  console.error("Error: REPLIT_DOMAINS environment variable is not set!");
+}
+
+// Log configuration during initialization
+console.log("Spotify Configuration:");
+console.log("- Client ID:", SPOTIFY_CLIENT_ID ? "Set" : "Missing");
+console.log("- Client Secret:", SPOTIFY_CLIENT_SECRET ? "Set" : "Missing");
+console.log("- Redirect URI:", SPOTIFY_REDIRECT_URI || "Not configured");
 
 export function setupSpotifyRoutes(app: Express) {
   app.use(session({
@@ -73,7 +85,11 @@ export function setupSpotifyRoutes(app: Express) {
         </script>
       `);
     } catch (error) {
-      console.error("Authentication failed:", error);
+      console.error("Spotify Authentication Error:");
+      console.error("- Error Details:", error instanceof Error ? error.message : "Unknown error");
+      console.error("- Stack Trace:", error instanceof Error ? error.stack : "No stack trace available");
+      console.error("- Redirect URI used:", SPOTIFY_REDIRECT_URI);
+      
       res.send(`
         <script>
           window.opener.postMessage('auth-error', '*');
