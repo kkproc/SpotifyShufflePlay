@@ -7,6 +7,8 @@ interface Artist {
   name: string;
 }
 
+type SpotifyCallback = (token: string) => void;
+
 declare global {
   interface Window {
     Spotify: {
@@ -66,12 +68,47 @@ export function useSpotify() {
     window.onSpotifyWebPlaybackSDKReady = () => {
       const player = new window.Spotify.Player({
         name: 'Vinyl Player',
-        getOAuthToken: cb => {
+        getOAuthToken: (cb: SpotifyCallback) => {
           fetch('/api/spotify/session-token')
             .then(res => res.json())
-            .then(data => cb(data.token));
+            .then(data => cb(data.token))
+            .catch(error => {
+              console.error('Failed to get token:', error);
+              toast({
+                title: "Error",
+                description: "Failed to initialize Spotify player",
+                variant: "destructive",
+              });
+            });
         },
         volume: 0.5
+      });
+
+      player.addListener('initialization_error', ({ message }) => {
+        console.error('Failed to initialize:', message);
+        toast({
+          title: "Error",
+          description: "Failed to initialize Spotify player",
+          variant: "destructive",
+        });
+      });
+
+      player.addListener('authentication_error', ({ message }) => {
+        console.error('Failed to authenticate:', message);
+        toast({
+          title: "Error",
+          description: "Authentication failed",
+          variant: "destructive",
+        });
+      });
+
+      player.addListener('account_error', ({ message }) => {
+        console.error('Failed to validate Spotify account:', message);
+        toast({
+          title: "Error",
+          description: "Premium account required",
+          variant: "destructive",
+        });
       });
 
       player.addListener('ready', ({ device_id }: { device_id: string }) => {
