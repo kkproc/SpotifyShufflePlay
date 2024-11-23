@@ -107,6 +107,14 @@ export function setupSpotifyRoutes(app: Express) {
     }
   });
 
+  app.get("/api/spotify/token", (req, res) => {
+    if (req.session.spotifyToken) {
+      res.json({ token: req.session.spotifyToken });
+    } else {
+      res.status(401).json({ error: "No token available" });
+    }
+  });
+
   app.get("/api/spotify/search", async (req, res) => {
     if (!req.session.spotifyToken) {
       return res.status(401).send("Not authenticated with Spotify");

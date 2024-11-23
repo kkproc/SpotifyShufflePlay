@@ -1,12 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-
-interface SpotifyTrack {
-  id: string;
-  name: string;
-  artists: { name: string }[];
-}
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "./use-toast";
 
 interface SpotifyArtist {
   id: string;
@@ -14,9 +8,68 @@ interface SpotifyArtist {
 }
 
 export function useSpotify() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchResults, setSearchResults] = useState<SpotifyArtist[]>([]);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [deviceReady, setDeviceReady] = useState(false);
+
+  useEffect(() => {
+    // Load Spotify Web Playback SDK
+    const script = document.createElement("script");
+    script.src = "https://sdk.scdn.co/spotify-player.js";
+    script.async = true;
+
+    document.body.appendChild(script);
+
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      const player = new window.Spotify.Player({
+        name: 'Vinyl Player Web Player',
+        getOAuthToken: async cb => {
+          try {
+            const res = await fetch('/api/spotify/token');
+            if (!res.ok) throw new Error('Failed to get token');
+            const data = await res.json();
+            cb(data.token);
+          } catch (error) {
+            console.error('Failed to get token:', error);
+          }
+        }
+      });
+
+      // Error handling
+      player.addListener('initialization_error', ({ message }: { message: string }) => {
+        console.error(message);
+        toast({
+          title: 'Player Error',
+          description: 'Failed to initialize player',
+          variant: 'destructive',
+        });
+      });
+
+      player.addListener('authentication_error', ({ message }: { message: string }) => {
+        console.error(message);
+        toast({
+          title: 'Authentication Error',
+          description: 'Failed to authenticate with Spotify',
+          variant: 'destructive',
+        });
+      });
+
+      player.addListener('ready', ({ device_id }: { device_id: string }) => {
+        console.log('Ready with Device ID', device_id);
+        setDeviceId(device_id);
+        setDeviceReady(true);
+      });
+
+      player.connect();
+    };
+
+    return () => {
+      script.remove();
+    };
+  }, [toast]);
+
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data === 'auth-success') {
@@ -76,8 +129,12 @@ export function useSpotify() {
   };
 
   const togglePlayMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/spotify/toggle-play", { method: "POST" });
+    mutationFn: async ({ device_id }: { device_id: string }) => {
+      const res = await fetch("/api/spotify/toggle-play", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id }),
+      });
       if (!res.ok) throw new Error("Failed to toggle playback");
       return res.json();
     },
@@ -95,7 +152,7 @@ export function useSpotify() {
       const res = await fetch("/api/spotify/play-random", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artistId }),
+        body: JSON.stringify({ artistId, device_id: deviceId }),
       });
       if (!res.ok) throw new Error("Failed to play random track");
       return res.json();
@@ -116,10 +173,23 @@ export function useSpotify() {
     isAuthenticated: !!session,
     currentTrack,
     isPlaying: currentTrack?.is_playing || false,
+    deviceReady,
     login,
     searchArtists,
     searchResults,
-    togglePlay: () => togglePlayMutation.mutate(),
+    togglePlay: () => togglePlayMutation.mutate({ device_id: deviceId! }),
     playRandomTrack: (artistId: string) => playRandomTrackMutation.mutate(artistId),
   };
+}
+
+declare global {
+  interface Window {
+    onSpotifyWebPlaybackSDKReady: () => void;
+    Spotify: {
+      Player: new (config: {
+        name: string;
+        getOAuthToken: (cb: (token: string) => void) => void;
+      }) => any;
+    };
+  }
 }

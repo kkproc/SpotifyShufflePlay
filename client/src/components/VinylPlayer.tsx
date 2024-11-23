@@ -4,6 +4,7 @@ import { Play, Pause, RotateCw } from "lucide-react";
 import { AudioVisualizer } from "./AudioVisualizer";
 import { useSpotify } from "../hooks/use-spotify";
 import { cn } from "@/lib/utils";
+import { useToast } from "../hooks/use-toast";
 
 interface VinylPlayerProps {
   artistId: string;
