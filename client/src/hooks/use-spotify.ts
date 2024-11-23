@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface SpotifyTrack {
   id: string;
@@ -17,6 +17,22 @@ export function useSpotify() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchResults, setSearchResults] = useState<SpotifyArtist[]>([]);
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data === 'auth-success') {
+        queryClient.invalidateQueries({ queryKey: ["spotify-session"] });
+      } else if (event.data === 'auth-error') {
+        toast({
+          title: "Error",
+          description: "Authentication failed",
+          variant: "destructive",
+        });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [queryClient, toast]);
 
   const { data: session } = useQuery({
     queryKey: ["spotify-session"],
@@ -38,7 +54,7 @@ export function useSpotify() {
   });
 
   const login = async () => {
-    window.location.href = "/api/spotify/login";
+    window.open("/api/spotify/login", "_blank", "width=800,height=600");
   };
 
   const searchArtists = async (query: string) => {

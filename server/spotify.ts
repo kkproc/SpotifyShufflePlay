@@ -15,8 +15,12 @@ const SPOTIFY_REDIRECT_URI = process.env.REPLIT_DOMAINS?.split(",")[0] + "/api/s
 export function setupSpotifyRoutes(app: Express) {
   app.use(session({
     secret: process.env.REPL_ID || "vinyl-player-secret",
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
   }));
 
   app.get("/api/spotify/login", (req, res) => {
@@ -62,10 +66,20 @@ export function setupSpotifyRoutes(app: Express) {
       }
 
       req.session.spotifyToken = data.access_token;
-      res.redirect("/");
+      res.send(`
+        <script>
+          window.opener.postMessage('auth-success', '*');
+          window.close();
+        </script>
+      `);
     } catch (error) {
       console.error("Authentication failed:", error);
-      res.status(500).send("Authentication failed: " + (error instanceof Error ? error.message : "Unknown error"));
+      res.send(`
+        <script>
+          window.opener.postMessage('auth-error', '*');
+          window.close();
+        </script>
+      `);
     }
   });
 
