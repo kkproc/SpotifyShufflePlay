@@ -1,6 +1,13 @@
 import { Express } from "express";
 import session from "express-session";
 
+// Declare session interface
+declare module 'express-session' {
+  interface SessionData {
+    spotifyToken?: string;
+  }
+}
+
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const SPOTIFY_REDIRECT_URI = process.env.REPLIT_DOMAINS?.split(",")[0] + "/api/spotify/callback";
@@ -24,6 +31,9 @@ export function setupSpotifyRoutes(app: Express) {
 
   app.get("/api/spotify/callback", async (req, res) => {
     const code = req.query.code as string;
+    if (!code) {
+      return res.status(400).send("Authorization code is required");
+    }
 
     try {
       const response = await fetch("https://accounts.spotify.com/api/token", {
@@ -41,11 +51,20 @@ export function setupSpotifyRoutes(app: Express) {
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`Spotify API error: ${response.statusText}`);
+      }
+
       const data = await response.json();
+      if (!data.access_token) {
+        throw new Error("No access token received");
+      }
+
       req.session.spotifyToken = data.access_token;
       res.redirect("/");
     } catch (error) {
-      res.status(500).send("Authentication failed");
+      console.error("Authentication failed:", error);
+      res.status(500).send("Authentication failed: " + (error instanceof Error ? error.message : "Unknown error"));
     }
   });
 
@@ -58,7 +77,14 @@ export function setupSpotifyRoutes(app: Express) {
   });
 
   app.get("/api/spotify/search", async (req, res) => {
+    if (!req.session.spotifyToken) {
+      return res.status(401).send("Not authenticated with Spotify");
+    }
+
     const query = req.query.q as string;
+    if (!query) {
+      return res.status(400).send("Search query is required");
+    }
     
     try {
       const response = await fetch(
@@ -70,10 +96,19 @@ export function setupSpotifyRoutes(app: Express) {
         }
       );
       
+      if (!response.ok) {
+        throw new Error(`Spotify API error: ${response.statusText}`);
+      }
+
       const data = await response.json();
+      if (!data.artists?.items) {
+        throw new Error("Invalid response format from Spotify API");
+      }
+
       res.json(data.artists.items);
     } catch (error) {
-      res.status(500).send("Search failed");
+      console.error("Search failed:", error);
+      res.status(500).send("Search failed: " + (error instanceof Error ? error.message : "Unknown error"));
     }
   });
 
