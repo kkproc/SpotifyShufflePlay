@@ -100,13 +100,6 @@ export function setupSpotifyRoutes(app: Express) {
   });
 
   app.get("/api/spotify/session", (req, res) => {
-  app.get("/api/spotify/session-token", (req, res) => {
-    if (req.session.spotifyToken) {
-      res.json({ token: req.session.spotifyToken });
-    } else {
-      res.status(401).json({ error: "No active session" });
-    }
-  });
     if (req.session.spotifyToken) {
       res.json({ authenticated: true });
     } else {
@@ -168,23 +161,7 @@ export function setupSpotifyRoutes(app: Express) {
       const randomTrack = tracksData.tracks[Math.floor(Math.random() * tracksData.tracks.length)];
 
       // Start playback
-      // Get available devices
-      const devicesResponse = await fetch(
-        "https://api.spotify.com/v1/me/player/devices",
-        {
-          headers: {
-            Authorization: `Bearer ${req.session.spotifyToken}`,
-          },
-        }
-      );
-      const devicesData = await devicesResponse.json();
-      const activeDevice = devicesData.devices.find((device: any) => device.is_active);
-
-      if (!activeDevice) {
-        return res.status(400).json({ error: "No active playback device found" });
-      }
-
-      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${activeDevice.id}`, {
+      await fetch("https://api.spotify.com/v1/me/player/play", {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${req.session.spotifyToken}`,
@@ -210,10 +187,6 @@ export function setupSpotifyRoutes(app: Express) {
       });
 
       const playerState = await stateResponse.json();
-      if (!playerState.device) {
-        return res.status(400).json({ error: "No active playback device found" });
-      }
-      
       const endpoint = playerState.is_playing ? "pause" : "play";
 
       await fetch(`https://api.spotify.com/v1/me/player/${endpoint}`, {
